@@ -1,0 +1,9 @@
+.env
+screenshots/*.png
+screenshots/*.txt
+venv/
+__pycache__/
+memory.txt
+roms/*.gba
+roms/*.zip
+roms/*.rom

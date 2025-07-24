@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Fire Red - AI Player</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .game-container {
+            flex: 1;
+            max-width: 600px;
+        }
+        
+        .ai-overlay {
+            width: 400px;
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            height: 600px;
+            overflow-y: auto;
+            border: 2px solid #444;
+        }
+        
+        .ai-title {
+            color: #4CAF50;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .ai-entry {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+            background: #333;
+        }
+        
+        .ai-timestamp {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        
+        .ai-reasoning {
+            color: #E8F5E8;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        
+        .ai-action {
+            color: #FFD700;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .ai-image-desc {
+            color: #87CEEB;
+            font-style: italic;
+            margin-bottom: 8px;
+            padding: 5px;
+            background: #1a1a2e;
+            border-radius: 3px;
+        }
+        
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .notice {
+            background: #2196F3;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .upload-area {
+            background: #333;
+            border: 2px dashed #666;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            border-color: #4CAF50;
+            background: #444;
+        }
+        
+        .upload-area.dragover {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+        
+        #rom-input {
+            display: none;
+        }
+        
+        #game {
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 10px;
+            border: 3px solid #4CAF50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 18px;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        /* Scrollbar styling for AI overlay */
+        .ai-overlay::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .ai-overlay::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        .ai-overlay::-webkit-scrollbar-thumb {
+            background: #4CAF50;
+            border-radius: 4px;
+        }
+        
+        .ai-overlay::-webkit-scrollbar-thumb:hover {
+            background: #45a049;
+        }
+    </style>
+            <script type="text/javascript" src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🎮 Pokemon Fire Red - AI Player</h1>
+        
+        <div class="notice">
+            🤖 <strong>AI AUTOMATION ACTIVE</strong><br>
+            Grok-4 is playing autonomously - watch the magic happen!
+        </div>
+        
+        <div class="upload-area" onclick="document.getElementById('rom-input').click();" 
+             ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+            <p>📁 Click here or drag & drop your Pokemon Fire Red ROM file</p>
+            <p style="font-size: 14px; color: #aaa;">Supported formats: .gba</p>
+            <input type="file" id="rom-input" accept=".gba" onchange="loadROM(this.files[0])">
+        </div>
+        
+        <div id="game">
+            🎮 Upload Pokemon Fire Red ROM to start
+        </div>
+        
+        <div class="status" id="gameStatus">
+            📁 Ready to load Pokemon Fire Red ROM...
+        </div>
+    </div>
+    
+    <div class="ai-overlay">
+        <div class="ai-title">
+            🧠 Grok-4 AI Thoughts
+        </div>
+        <div id="aiThoughts">
+            <div class="ai-entry">
+                <div class="ai-timestamp">System</div>
+                <div class="ai-reasoning">AI player ready. Upload ROM to begin Pokemon adventure.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let gameLoaded = false;
+        let emulator = null;
+        
+        function updateStatus(message) {
+            document.getElementById('gameStatus').innerHTML = message;
+            console.log('Status:', message);
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+        
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('dragover');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                loadROM(files[0]);
+            }
+        }
+        
+        function loadROM(file) {
+            if (!file) return;
+            
+            updateStatus('🔄 Loading ROM: ' + file.name);
+            addAIThought(null, `Loading Pokemon ROM: ${file.name}`, 'LOAD_ROM');
+            
+            // Hide upload area and prepare game container
+            document.querySelector('.upload-area').style.display = 'none';
+            document.getElementById('game').innerHTML = '';
+            
+            // Configure EmulatorJS
+            window.EJS_player = '#game';
+            window.EJS_gameUrl = URL.createObjectURL(file);
+            window.EJS_core = 'gba';
+            window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+            window.EJS_startOnLoaded = true;
+            window.EJS_fullscreenOnLoaded = false;
+            
+            // Set up callbacks
+            window.EJS_onGameStart = function() {
+                gameLoaded = true;
+                updateStatus('✅ Game loaded! AI can now play.');
+                addAIThought(null, 'Pokemon Fire Red has loaded successfully. Ready to begin adventure!', null);
+                console.log('🎮 Game started successfully!');
+            };
+            
+            window.EJS_onLoadState = function() {
+                console.log('📁 Loading game state...');
+            };
+            
+            window.EJS_onSaveState = function() {
+                console.log('💾 Saving game state...');
+            };
+            
+            // Load EmulatorJS
+            const script = document.createElement('script');
+            script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+            script.onload = function() {
+                updateStatus('🎮 Emulator initializing...');
+            };
+            script.onerror = function() {
+                updateStatus('❌ Failed to load emulator');
+            };
+            
+            document.head.appendChild(script);
+        }
+        
+        // AI thoughts management
+        function addAIThought(imageDesc, reasoning, action) {
+            const thoughtsContainer = document.getElementById('aiThoughts');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const entry = document.createElement('div');
+            entry.className = 'ai-entry';
+            
+            let html = `<div class="ai-timestamp">${timestamp}</div>`;
+            
+            if (imageDesc) {
+                html += `<div class="ai-image-desc">👁️ Sees: ${imageDesc}</div>`;
+            }
+            
+            if (reasoning) {
+                html += `<div class="ai-reasoning">🤔 Thinks: ${reasoning}</div>`;
+            }
+            
+            if (action) {
+                html += `<div class="ai-action">⚡ Action: ${action}</div>`;
+            }
+            
+            entry.innerHTML = html;
+            thoughtsContainer.appendChild(entry);
+            
+            // Auto-scroll to bottom
+            thoughtsContainer.scrollTop = thoughtsContainer.scrollHeight;
+            
+            // Keep only last 20 entries
+            const entries = thoughtsContainer.querySelectorAll('.ai-entry');
+            if (entries.length > 20) {
+                entries[0].remove();
+            }
+        }
+        
+        // Enhanced keyboard event handling for AI inputs
+        function simulateKeyPress(keyCode, key) {
+            const canvas = document.querySelector('#game canvas') || document.querySelector('canvas');
+            const target = canvas || document;
+            
+            const keyDownEvent = new KeyboardEvent('keydown', {
+                key: key,
+                keyCode: keyCode,
+                which: keyCode,
+                bubbles: true,
+                cancelable: true
+            });
+            
+            const keyUpEvent = new KeyboardEvent('keyup', {
+                key: key,
+                keyCode: keyCode,
+                which: keyCode,
+                bubbles: true,
+                cancelable: true
+            });
+            
+            // Send to multiple targets
+            [target, document, window].forEach(t => {
+                if (t && t.dispatchEvent) {
+                    t.dispatchEvent(keyDownEvent);
+                }
+            });
+            
+            setTimeout(() => {
+                [target, document, window].forEach(t => {
+                    if (t && t.dispatchEvent) {
+                        t.dispatchEvent(keyUpEvent);
+                    }
+                });
+            }, 100);
+            
+            console.log('AI Key Input:', key, keyCode);
+        }
+        
+        // Global functions for AI control
+        window.addAIThought = addAIThought;
+        window.simulateKeyPress = simulateKeyPress;
+        window.loadROM = loadROM;
+        
+        // Keyboard controls hint for AI
+        window.GAME_CONTROLS = {
+            'A': { key: 'z', keyCode: 90, description: 'Interact/Confirm' },
+            'B': { key: 'x', keyCode: 88, description: 'Cancel/Back' },
+            'START': { key: 'Enter', keyCode: 13, description: 'Start/Menu' },
+            'SELECT': { key: 'Shift', keyCode: 16, description: 'Select/Options' },
+            'UP': { key: 'ArrowUp', keyCode: 38, description: 'Move Up' },
+            'DOWN': { key: 'ArrowDown', keyCode: 40, description: 'Move Down' },
+            'LEFT': { key: 'ArrowLeft', keyCode: 37, description: 'Move Left' },
+            'RIGHT': { key: 'ArrowRight', keyCode: 39, description: 'Move Right' },
+            'L': { key: 'a', keyCode: 65, description: 'Left Shoulder' },
+            'R': { key: 's', keyCode: 83, description: 'Right Shoulder' }
+        };
+        
+        console.log('🎮 Pokemon AI Player initialized');
+        console.log('🤖 Waiting for ROM upload...');
+        console.log('🎯 Game Controls Available:', window.GAME_CONTROLS);
+    </script>
+</body>
+</html> 
