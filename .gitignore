@@ -7,3 +7,4 @@ memory.txt
 roms/*.gba
 roms/*.zip
 roms/*.rom
+.DS_Store

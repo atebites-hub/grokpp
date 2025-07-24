@@ -360,35 +360,11 @@
                             btn.style.fontSize = '24px';
                             btn.style.cursor = 'pointer';
                             
-                            // Auto-click the start button after styling
-                            setTimeout(() => {
-                                console.log('🎮 Auto-clicking start button:', btn);
-                                btn.click();
-                            }, 1000);
+                            // DISABLED: Auto-clicking start buttons to prevent netplay popup
+                            console.log('🎮 Start button styled but NOT auto-clicked to avoid netplay');
                         });
                         
-                        // Also try to auto-click any other play/start elements
-                        setTimeout(() => {
-                            const allStartElements = gameContainer.querySelectorAll('button, [role="button"], .ejs__play_button, .ejs_play_button');
-                            allStartElements.forEach(el => {
-                                if (el.textContent.toLowerCase().includes('play') || 
-                                    el.textContent.toLowerCase().includes('start') ||
-                                    el.className.includes('play') ||
-                                    el.className.includes('start')) {
-                                    console.log('🎮 Auto-clicking start element:', el);
-                                    el.click();
-                                }
-                            });
-                        }, 1500);
-                        
-                        // Final fallback: click center of game area
-                        setTimeout(() => {
-                            const canvas = gameContainer.querySelector('canvas');
-                            if (canvas) {
-                                console.log('🎮 Auto-clicking canvas center to start game');
-                                canvas.click();
-                            }
-                        }, 2000);
+                        // No auto-clicking - let Python handle the single center click after 10s
                     }
                 }, 500);
                 

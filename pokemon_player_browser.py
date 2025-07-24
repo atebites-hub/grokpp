@@ -87,6 +87,84 @@ class PokemonAIPlayer:
         except Exception as e:
             self.log(f"⚠️ Error saving memory: {e}")
 
+    def cleanup_memory_with_ai(self):
+        """Use AI to clean up, summarize, and reorganize memory"""
+        try:
+            self.log("🧠 Starting intelligent memory cleanup...")
+            
+            memory_list = self.load_memory()
+            if len(memory_list) < 50:  # Only cleanup if there's substantial memory
+                return memory_list
+            
+            # Join all memories for AI analysis
+            current_memory = "\n".join([f"{i+1}. {memory}" for i, memory in enumerate(memory_list)])
+            
+            cleanup_prompt = [{
+                "role": "system", 
+                "content": f"""You are an AI memory management system for a Pokemon Fire Red gameplay session. 
+
+CURRENT MEMORY (320 entries max):
+{current_memory}
+
+Your task: Clean up, summarize, and reorganize this memory for optimal gameplay context.
+
+CLEANUP RULES:
+1. **Remove Duplicates**: Merge repetitive "CURRENT PROGRESS" entries
+2. **Summarize Sequences**: Condense long intro sequences into key milestones
+3. **Detect Loops**: Identify and flag repetitive action patterns
+4. **Prioritize Recent**: Keep recent events detailed, summarize older events
+5. **Maintain Structure**: Keep the natural progression flow
+6. **Flag Inconsistencies**: Note any contradictory information
+7. **Preserve Screenshot Links**: Maintain SCREENSHOTS: [X,Y] associations for visual context
+
+OUTPUT FORMAT - Return cleaned memory as a JSON list:
+{{
+    "cleaned_memory": [
+        "SCREENSHOTS: [1-20] | SUMMARY: Completed Professor Oak's introduction sequence (selected male character, advanced through tutorials)",
+        "SCREENSHOTS: [21] | CURRENT LOCATION: [Current area]",
+        "SCREENSHOTS: [21] | RECENT ACTION: [Last meaningful action]",
+        "SCREENSHOTS: [N/A] | TEAM STATUS: [Pokemon team if any]",
+        "SCREENSHOTS: [N/A] | OBJECTIVE: [Next goal]",
+        "SCREENSHOTS: [N/A] | FLAGS: [Any issues detected: loops, inconsistencies, etc.]"
+    ],
+    "cleanup_notes": "Summary of changes made",
+    "issues_detected": ["list of any problems found"]
+}}
+
+Be thorough but preserve important game state information."""
+            }, {
+                "role": "user",
+                "content": "Please analyze and clean up this Pokemon Fire Red memory log. Focus on removing redundancy while preserving all important game state information."
+            }]
+            
+            # Use robust API call for memory cleanup
+            content = self.robust_api_call(cleanup_prompt, max_tokens=32000, temperature=0.3, function_name="Memory Cleanup")
+            
+            if content:
+                cleanup_result = self.parse_json_with_fallback(content, "Memory Cleanup", "")
+                
+                if "cleaned_memory" in cleanup_result:
+                    cleaned_memory = cleanup_result["cleaned_memory"]
+                    self.log(f"✅ Memory cleanup successful: {len(memory_list)} → {len(cleaned_memory)} entries")
+                    
+                    if "cleanup_notes" in cleanup_result:
+                        self.log(f"📝 Cleanup notes: {cleanup_result['cleanup_notes']}")
+                    
+                    if "issues_detected" in cleanup_result and cleanup_result["issues_detected"]:
+                        self.log(f"⚠️ Issues detected: {', '.join(cleanup_result['issues_detected'])}")
+                    
+                    return cleaned_memory
+                else:
+                    self.log("❌ Memory cleanup failed - invalid response format")
+                    return memory_list
+            else:
+                self.log("❌ Memory cleanup failed - no response")
+                return memory_list
+                
+        except Exception as e:
+            self.log(f"❌ Memory cleanup error: {e}")
+            return memory_list
+
     def setup_browser(self):
         """Setup Chrome browser with local emulator - OPTIMIZED for speed"""
         self.log("🔧 Setting up Chrome browser...")
@@ -609,9 +687,10 @@ Be specific about game elements: coordinates, distances, exact button sequences 
 MEMORY: {memory_context}
 
 Tools available:
+- analyze_with_vision() - Direct AI vision analysis, this is the preferred way to see the game.
 - take_screenshot() - See current game state (saves as screenshot_N.png + description as screenshot_N.txt)
 - recall_screenshot(N) - View previous screenshot N description (reads screenshot_N.txt)
-- analyze_with_vision() - FALLBACK: Direct AI vision analysis when text descriptions aren't clear enough
+
 
 Respond with JSON (ONLY choose tools, no actions):
 {{
@@ -630,9 +709,9 @@ SCREENSHOT SYSTEM:
 - Current screenshot count: {self.screenshot_count}
 
 STRATEGY:
-- Usually use take_screenshot() to see current state
+- Usually use analyze_with_vision() to see current state
 - Use recall_screenshot(N) to remember past locations/screens (reads screenshot_N.txt)
-- Use analyze_with_vision() ONLY when text descriptions are insufficient for navigation
+- Use take_screenshot() when you need detailed text descriptions of the viewport
 - You'll make gameplay decisions AFTER seeing the visual info
 
 Focus: Choose the right tool to get visual information you need."""
@@ -649,21 +728,21 @@ Focus: Choose the right tool to get visual information you need."""
                 
                 # Ensure we always have tool_calls
                 if "tool_calls" not in result:
-                    result["tool_calls"] = [{"tool": "take_screenshot"}]
+                    result["tool_calls"] = [{"tool": "analyze_with_vision"}]
                 if "reasoning" not in result:
                     result["reasoning"] = "Default reasoning"
                     
                 return result
             else:
                 return {
-                    "tool_calls": [{"tool": "take_screenshot"}],
+                    "tool_calls": [{"tool": "analyze_with_vision"}],
                     "reasoning": "API failed, taking screenshot"
                 }
                 
         except Exception as e:
             self.log(f"❌ AI query error: {e}")
             return {
-                "tool_calls": [{"tool": "take_screenshot"}],
+                "tool_calls": [{"tool": "analyze_with_vision"}],
                 "reasoning": f"Error: {e}",
                 "actions": ["START"]
             }
@@ -715,6 +794,18 @@ Focus: Choose the right tool to get visual information you need."""
                 else:
                     results.append("Direct vision analysis failed")
                     self.log("❌ Direct vision analysis failed")
+                    
+            elif tool_name == "cleanup_memory":
+                self.log("🧠 Manual memory cleanup requested...")
+                memory_list = self.load_memory()
+                cleaned_memory = self.cleanup_memory_with_ai()
+                if cleaned_memory and len(cleaned_memory) != len(memory_list):
+                    self.save_memory(cleaned_memory)
+                    results.append(f"Memory cleanup completed: {len(memory_list)} → {len(cleaned_memory)} entries")
+                    self.log(f"✅ Manual memory cleanup successful: {len(memory_list)} → {len(cleaned_memory)}")
+                else:
+                    results.append("Memory cleanup completed - no changes needed")
+                    self.log("✅ Memory cleanup completed - no changes needed")
         
         return results
     
@@ -887,16 +978,18 @@ IMPORTANT:
 - Use A to advance dialogue and interact with NPCs/objects
 - Use arrows to move around - batch them for efficiency (["UP", "UP", "UP"])
 - Only use START if you see a title screen or need the main menu
-- Don't spam START button!
+- Use buttons appropriately based on context
 - Use memory.txt to track your progress and plan ahead (320 entries, ~100 tokens each)
 - Include rich detail: locations, Pokemon, battles, story progress, items, NPCs
-- Batch actions when possible to move faster
+- Always associate memories with screenshot numbers: "SCREENSHOTS: [X,Y] | LOCATION: ..."
+- 🚀 BATCH ACTIONS AGGRESSIVELY: For intro/tutorial text, send ["A","A","A","A","A"] to blast through dialogue
+- Only take individual actions when making choices or entering text
 
-START BUTTON TROUBLESHOOTING:
-- If START doesn't work on title screens, try A instead
-- If you just pressed START and nothing happened, use A to proceed
-- A button is more reliable than START for advancing screens
-- When in doubt between START and A, choose A"""
+START BUTTON USAGE:
+- Use START to access in-game menus and pause screens
+- Use A button for dialogue, tutorials, and most navigation
+- If START doesn't work on a screen, try A instead
+- Both START and A are valid - choose based on context"""
                 },
                 {
                     "role": "user",
@@ -997,11 +1090,25 @@ Respond with JSON containing:
 
 Available actions: A, B, START, SELECT, UP, DOWN, LEFT, RIGHT, L, R
 
-BATCHING: You can send multiple actions in sequence for efficiency:
+🚀 AGGRESSIVE BATCHING REQUIRED: You can and SHOULD send multiple actions in sequence:
 - ["UP", "UP", "UP"] to move up 3 spaces quickly
 - ["LEFT", "LEFT", "A"] to move left twice then interact
-- ["A", "A", "A"] to advance through multiple text boxes
-- Each action has 0.75s delay, so plan efficient sequences
+- ["A", "A", "A", "A", "A"] to RAPIDLY advance through intro/tutorial dialogue
+- ["A", "A", "A", "A"] for repetitive menu navigation
+- Each action has 0.75s delay, so batch aggressively for speed
+
+⚡ INTRO/TUTORIAL EFFICIENCY: For obvious dialogue sequences (Professor Oak intro, controls tutorial, story exposition):
+- Use ["A", "A", "A", "A", "A"] to blast through 5+ dialogue boxes at once
+- Only take individual actions when you need to make a choice or enter text
+- Don't waste time taking screenshots between every single text advance
+- Be AGGRESSIVE about batching during repetitive sequences
+
+🎯 SPECIFIC SITUATIONS REQUIRING BATCHING:
+- Professor Oak intro dialogue: ["A", "A", "A", "A", "A"] 
+- Controls tutorial pages: ["A", "A", "A", "A"]
+- Story exposition with Pikachu: ["A", "A", "A", "A"]
+- Any "red arrow" dialogue sequences: BATCH MULTIPLE A's!
+- Only use single ["A"] when you see actual choices or text input
 
 MEMORY SYSTEM: Use your memory.txt scratchpad for:
 - Long-term planning and objectives
@@ -1011,7 +1118,7 @@ MEMORY SYSTEM: Use your memory.txt scratchpad for:
 - Progress tracking through the story
 
 Key strategies:
-- Press START on title screens to begin
+- Use A for most navigation, START for menus and pause screens
 - Use A to advance dialogue and interact with NPCs/objects
 - Use B to go back in menus  
 - Use arrow keys to move around the overworld
@@ -1028,11 +1135,12 @@ Memory management (memory.txt is your massive persistent scratchpad - 320 entrie
 - Track exploration: routes visited, areas unlocked, secrets found
 
 Examples of good memory entries:
-- "ROUTE 1: Caught Pidgey Lv4 (Tackle/Sand Attack), fought 3 trainers, gained 200 exp, learned type advantages. Rattata weak to Fighting moves. NEXT: Train team to Lv8 before Brock"
-- "VIRIDIAN CITY: Visited Pokemon Center (healed team), bought 5 Pokeballs, 3 Potions. Gym Leader absent. Old man taught catching demo. NEXT: Explore Route 2, find Viridian Forest"
+- "SCREENSHOTS: [15,16,17] | ROUTE 1: Caught Pidgey Lv4 (Tackle/Sand Attack), fought 3 trainers, gained 200 exp, learned type advantages. Rattata weak to Fighting moves. NEXT: Train team to Lv8 before Brock"
+- "SCREENSHOTS: [23,24] | VIRIDIAN CITY: Visited Pokemon Center (healed team), bought 5 Pokeballs, 3 Potions. Gym Leader absent. Old man taught catching demo. NEXT: Explore Route 2, find Viridian Forest"
 
 REMEMBER: You have MASSIVE memory capacity - use detailed, structured entries!
-BATCH ACTIONS: Chain movements and interactions for efficiency with 0.75s delays."""
+🚀 BATCH ACTIONS AGGRESSIVELY: Chain movements and interactions for maximum efficiency with 0.75s delays.
+⚡ SPEED RULE: For intro sequences, tutorials, and repetitive dialogue - BATCH 4-5 A's at once! Don't be cautious!"""
                     },
                     {
                         "role": "user",
@@ -1131,6 +1239,19 @@ BATCH ACTIONS: Chain movements and interactions for efficiency with 0.75s delays
                 new_memory = new_memory[-320:]
                 self.log("🧠 Trimmed memory to last 320 items")
             
+            # Trigger intelligent cleanup if memory is getting repetitive
+            elif len(new_memory) > 100 and len(new_memory) % 50 == 0:  # Every 50 entries after 100
+                self.log("🧠 Memory checkpoint reached - checking for cleanup needs...")
+                
+                # Quick analysis for repetitive patterns
+                recent_entries = new_memory[-20:]  # Last 20 entries
+                if len(set(recent_entries)) < len(recent_entries) * 0.5:  # If >50% are duplicates
+                    self.log("🔄 Repetitive memory detected - triggering AI cleanup...")
+                    cleaned_memory = self.cleanup_memory_with_ai()
+                    if cleaned_memory and len(cleaned_memory) < len(new_memory):
+                        new_memory = cleaned_memory
+                        self.log(f"✅ Memory optimized via AI cleanup")
+            
             return new_memory
             
         except Exception as e:
@@ -1188,8 +1309,10 @@ FOR BATTLES/MENUS:
 - Describe options and recommend selections
 - Battle strategy and type advantages
 
-MOVEMENT EFFICIENCY: Always suggest batched actions for faster gameplay.
-Example: Instead of "move up then left", say "[UP, UP, LEFT, LEFT]"
+🚀 AGGRESSIVE EFFICIENCY REQUIRED: Always suggest batched actions for maximum speed.
+⚡ DIALOGUE RULE: For story/tutorial text, use ["A","A","A","A","A"] to advance 5 dialogue boxes at once!
+🎯 MOVEMENT RULE: Instead of "move up then left", say "[UP, UP, LEFT, LEFT]"
+⏱️ SPEED PRIORITY: Don't waste time with single actions during obvious repetitive sequences!
 
 Be specific about visual details and provide actionable navigation guidance."""
                 },
@@ -1245,17 +1368,33 @@ MEMORY (your persistent scratchpad - up to 320 entries):
 {memory_context}
 
 CURRENT VISUAL: {screenshot_desc}
+CURRENT SCREENSHOT: This is screenshot #{self.screenshot_count} - reference this number in your memory entries
 
-SMART START/A DETECTION:
-- Check your memory for recent "ATTEMPTED: START button pressed" entries
-- If you see recent START attempts but screen hasn't progressed, use A instead
-- If you're on a title screen or menu and unsure, A is safer than START
+BUTTON SELECTION STRATEGY:
+- A button: Primary for dialogue, tutorials, confirmations, and most navigation
+- START button: For accessing in-game menus, pause screens, and game options
+- If unsure which to use, A is usually the safer choice for progression
+- Try START if you need to access menus or pause the game
 
 MEMORY GUIDELINES:
 - You have room for 320 memory entries (massive context!)
 - Make each memory entry ~100 tokens (about 75-100 words)
 - Include rich detail: locations, Pokemon encountered, battle outcomes, story progress
 - Use structured format: "LOCATION: Pallet Town | ACTION: Talked to Mom | RESULT: Got running shoes | NEXT: Visit Oak's lab"
+- **ASSOCIATE WITH SCREENSHOTS**: Link memories to relevant screenshot files for reference
+
+MEMORY-SCREENSHOT LINKING:
+- Format: "SCREENSHOTS: [1,2,3] | LOCATION: Pallet Town | ACTION: Talked to Mom..."
+- Always reference which screenshot numbers are relevant to each memory
+- This helps you recall visual context and verify memory accuracy
+- You can use recall_screenshot(N) to review linked screenshots later
+
+MEMORY SELF-MONITORING:
+- If you notice repetitive or contradictory entries, flag them for cleanup
+- If stuck in loops (same actions repeatedly), recognize this and try different approaches
+- Periodically assess if your memory accurately reflects game state
+- You can use the analyze_with_vision() tool to verify current situation vs memory
+- Use screenshot associations to cross-reference visual evidence with memories
 
 Respond with JSON:
 {{
@@ -1280,8 +1419,14 @@ BUTTON TROUBLESHOOTING:
 BATCHING: Use efficient sequences like ["UP","UP","A"] or ["A","A","A"]
 MEMORY: Update your progress with rich detail (~100 tokens per entry, up to 320 entries)
 - Include: locations, Pokemon encounters, battle results, story progress, NPCs met
-- Format: "LOCATION: Route 1 | POKEMON: Caught Pidgey Lv3 | MOVES: Tackle, Sand Attack | NEXT: Head to Viridian City"
-TOOLS: You can use recall_screenshot(N) or analyze_with_vision() if needed
+- Format: "SCREENSHOTS: [X,Y] | LOCATION: Route 1 | POKEMON: Caught Pidgey Lv3 | MOVES: Tackle, Sand Attack | NEXT: Head to Viridian City"
+- Always link memories to relevant screenshot numbers for visual reference
+TOOLS: You can use recall_screenshot(N), analyze_with_vision(), or cleanup_memory() if needed
+
+MEMORY MANAGEMENT TOOLS:
+- cleanup_memory(): Use if you notice repetitive or contradictory memory entries
+- This will intelligently reorganize and summarize your memory for better context
+- Useful when stuck in loops or when memory seems inconsistent with current state
 
 Strategy: Based on what you see, decide the best actions to progress the game. If START fails, fallback to A."""
                 },
@@ -1781,21 +1926,27 @@ Strategy: Based on what you see, decide the best actions to progress the game. I
             # Step 2: Simulate user interaction to start the emulator
             self.log("🖱️ Simulating user interaction to start emulator...")
             
+            # Wait 2 seconds for game to load before attempting start
+            self.log("⏳ Waiting 2 seconds for game to load...")
+            time.sleep(2)
+            
+            # Single center click to start the game (no button hunting)
             start_js = """
             try {
                 const gameDiv = document.getElementById('game');
                 const canvas = gameDiv.querySelector('canvas');
                 
                 if (canvas) {
-                    // Focus the canvas
+                    console.log('🎮 Game loaded - performing single center click to start');
+                    
+                    // Focus the canvas first
                     canvas.focus();
                     
-                    // Click on the canvas to activate
+                    // Single click at center of emulator screen
                     const rect = canvas.getBoundingClientRect();
                     const centerX = rect.left + rect.width / 2;
                     const centerY = rect.top + rect.height / 2;
                     
-                    // Create multiple click events to ensure activation
                     const clickEvent = new MouseEvent('click', {
                         view: window,
                         bubbles: true,
@@ -1805,43 +1956,9 @@ Strategy: Based on what you see, decide the best actions to progress the game. I
                     });
                     
                     canvas.dispatchEvent(clickEvent);
+                    console.log('🎮 Single center click completed');
                     
-                    // Also trigger any play buttons if they exist
-                    const playButtons = document.querySelectorAll('button, .play-button, .start-button, .ejs__play_button, .ejs_play_button, [class*="play"], [class*="start"]');
-                    let buttonClicked = false;
-                    
-                    playButtons.forEach(btn => {
-                        if (btn.textContent.toLowerCase().includes('play') || 
-                            btn.textContent.toLowerCase().includes('start') ||
-                            btn.className.includes('play') ||
-                            btn.className.includes('start')) {
-                            console.log('🎮 Clicking start/play button:', btn);
-                            btn.click();
-                            buttonClicked = true;
-                        }
-                    });
-                    
-                    // Look specifically for the green circular start button we styled
-                    const greenStartButton = document.querySelector('[style*="background: #4CAF50"], [style*="border-radius: 50%"]');
-                    if (greenStartButton && !buttonClicked) {
-                        console.log('🎮 Clicking green start button');
-                        greenStartButton.click();
-                        buttonClicked = true;
-                    }
-                    
-                    // If no specific button found, try clicking anywhere that might trigger start
-                    if (!buttonClicked) {
-                        // Click center of the game area to trigger any hidden start elements
-                        canvas.click();
-                        console.log('🎮 Clicked canvas center as fallback');
-                    }
-                    
-                    // Try to start EmulatorJS if available
-                    if (window.EJS && typeof window.EJS.start === 'function') {
-                        window.EJS.start();
-                    }
-                    
-                    return 'INTERACTION_SENT';
+                    return 'CENTER_CLICKED';
                 } else {
                     return 'NO_CANVAS_FOUND';
                 }
@@ -1852,9 +1969,9 @@ Strategy: Based on what you see, decide the best actions to progress the game. I
             """
             
             interaction_result = self.driver.execute_script(start_js)
-            self.log(f"🖱️ Interaction result: {interaction_result}")
+            self.log(f"🖱️ Start interaction: {interaction_result}")
             
-            # Step 3: Wait for the game to actually start
+            # Brief wait for start to register
             self.log("⏳ Waiting for game to start...")
             
             for i in range(20):  # Wait up to 40 seconds
