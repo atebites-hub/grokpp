@@ -54,6 +54,15 @@ def production_run():
         if not check_prerequisites():
             return False
         
+        # SPEED OPTIMIZATION: Clean up any leftover processes
+        print("🧹 Cleaning up previous processes...")
+        try:
+            import subprocess
+            subprocess.run(['pkill', '-9', '-f', 'chromedriver'], capture_output=True, timeout=2)
+            subprocess.run(['pkill', '-9', '-f', 'chrome.*automation'], capture_output=True, timeout=2)
+        except:
+            pass
+        
         print("🚀 Initializing Grok Pokemon AI Player...")
         player = PokemonAIPlayer()
         

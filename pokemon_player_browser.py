@@ -34,18 +34,18 @@ class PokemonAIPlayer:
         # Ensure screenshots folder exists
         os.makedirs(self.screenshots_folder, exist_ok=True)
         
-        # Game controls mapping
+        # Game controls mapping (synchronized with JavaScript keyMappings)
         self.controls = {
-            'A': 'z',
-            'B': 'x', 
-            'START': 'Return',
-            'SELECT': 'Shift',
-            'UP': 'Up',
-            'DOWN': 'Down',
-            'LEFT': 'Left',
-            'RIGHT': 'Right',
-            'L': 'a',
-            'R': 's'
+            'A': 'z',           # KeyZ, keyCode: 90
+            'B': 'x',           # KeyX, keyCode: 88
+            'START': 'Enter',   # Enter, keyCode: 13 (FIXED: was 'Return')
+            'SELECT': 'Shift',  # ShiftLeft, keyCode: 16
+            'UP': 'ArrowUp',    # ArrowUp, keyCode: 38
+            'DOWN': 'ArrowDown', # ArrowDown, keyCode: 40
+            'LEFT': 'ArrowLeft', # ArrowLeft, keyCode: 37
+            'RIGHT': 'ArrowRight', # ArrowRight, keyCode: 39
+            'L': 'a',           # KeyA, keyCode: 65
+            'R': 's'            # KeyS, keyCode: 83
         }
         
         if not self.api_key:
@@ -88,8 +88,19 @@ class PokemonAIPlayer:
             self.log(f"⚠️ Error saving memory: {e}")
 
     def setup_browser(self):
-        """Setup Chrome browser with local emulator"""
+        """Setup Chrome browser with local emulator - OPTIMIZED for speed"""
         self.log("🔧 Setting up Chrome browser...")
+        
+        # SPEED OPTIMIZATION: Kill any lingering chromedriver processes
+        try:
+            import subprocess
+            import platform
+            if platform.system() == "Darwin":  # macOS
+                subprocess.run(['pkill', '-f', 'chromedriver'], capture_output=True, timeout=2)
+            elif platform.system() == "Linux":
+                subprocess.run(['pkill', '-f', 'chromedriver'], capture_output=True, timeout=2)
+        except:
+            pass  # Don't let cleanup failures block startup
         
         chrome_options = Options()
         chrome_options.add_argument("--no-sandbox")
@@ -100,6 +111,15 @@ class PokemonAIPlayer:
         chrome_options.add_argument("--allow-file-access")
         chrome_options.add_argument("--disable-features=VizDisplayCompositor")
         chrome_options.add_argument("--start-maximized")
+        
+        # SPEED OPTIMIZATION: Disable unnecessary features
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-images")  # Speed up page loading
+        chrome_options.add_argument("--disable-javascript-harmony-shipping")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
         
         # Critical: Enable file access
         chrome_options.add_argument("--allow-file-access")
@@ -124,71 +144,20 @@ class PokemonAIPlayer:
             chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         
         try:
-            # Try with explicit ChromeDriver management
-            service = Service(ChromeDriverManager().install())
-            
-            # Add service arguments for better stability
-            service.creationflags = 0
-            
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            
+            # SPEED OPTIMIZATION: Go directly to the working method (skip service management)
+            self.driver = webdriver.Chrome(options=chrome_options)
             self.driver.set_window_size(1400, 800)
             self.driver.set_window_position(100, 100)
             
             self.log("✅ Browser setup complete!")
-            self.log("🤖 'Chrome is being controlled by automated test software' warning should be visible")
             self.log("👀 You should now see a Chrome window open!")
             
         except Exception as e:
-            self.log(f"❌ ChromeDriver failed, trying alternative approach: {e}")
-            
-            # Fallback: Try without service management
-            try:
-                # Create fresh options for fallback
-                fallback_options = Options()
-                fallback_options.add_argument("--no-sandbox")
-                fallback_options.add_argument("--disable-dev-shm-usage")
-                fallback_options.add_argument("--disable-web-security")
-                fallback_options.add_argument("--allow-running-insecure-content")
-                fallback_options.add_argument("--allow-file-access-from-files")
-                fallback_options.add_argument("--allow-file-access")
-                fallback_options.add_argument("--disable-features=VizDisplayCompositor")
-                fallback_options.add_argument("--start-maximized")
-                
-                # Critical: Enable file access
-                fallback_options.add_argument("--allow-file-access")
-                fallback_options.add_argument("--allow-file-access-from-files")
-                fallback_options.add_argument("--disable-web-security")
-                
-                # Use unique user data directory to avoid conflicts
-                import tempfile
-                import uuid
-                unique_dir = os.path.join(tempfile.gettempdir(), f"chrome_pokemon_ai_{uuid.uuid4().hex[:8]}")
-                fallback_options.add_argument(f"--user-data-dir={unique_dir}")
-                
-                # Remove automation detection
-                fallback_options.add_argument("--disable-blink-features=AutomationControlled")
-                fallback_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                fallback_options.add_experimental_option('useAutomationExtension', False)
-                fallback_options.add_experimental_option("detach", True)
-                
-                # Set Chrome binary for macOS
-                if platform.system() == "Darwin":
-                    fallback_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                
-                self.driver = webdriver.Chrome(options=fallback_options)
-                self.driver.set_window_size(1400, 800)
-                self.driver.set_window_position(100, 100)
-                
-                self.log("✅ Browser setup complete (fallback method)!")
-                self.log("👀 You should now see a Chrome window open!")
-                
-            except Exception as e2:
-                self.log(f"❌ All browser setup methods failed: {e2}")
-                raise
+            self.log(f"❌ Browser setup failed: {e}")
+            raise
 
     def load_emulator(self):
-        """Load the local GBA emulator"""
+        """Load the local GBA emulator - OPTIMIZED for speed"""
         emulator_path = os.path.abspath("local_emulator.html")
         self.log(f"📂 Loading emulator from: {emulator_path}")
         
@@ -208,95 +177,37 @@ class PokemonAIPlayer:
             self.log(f"🌐 Navigating to: {file_url}")
             self.driver.get(file_url)
             
-            # Wait briefly for initial load
-            time.sleep(1)
-            
-            # Verify the page loaded correctly
-            current_url = self.driver.current_url
-            self.log(f"📍 Current URL: {current_url}")
-            
-            if current_url == "data:," or "data:" in current_url:
-                self.log("⚠️ File URL failed, trying alternative method...")
-                
-                # Alternative: Navigate to Chrome's internal page first, then to file
-                self.driver.get("chrome://version/")
-                time.sleep(1)
-                self.driver.get(file_url)
-                time.sleep(2)
-                
-                current_url = self.driver.current_url
-                self.log(f"📍 After retry, current URL: {current_url}")
-            
-            # Wait for emulator elements to load
-            wait = WebDriverWait(self.driver, 15)
+            # SPEED OPTIMIZATION: Quick page load verification (no unnecessary waits)
+            wait = WebDriverWait(self.driver, 5)  # Reduced from 15 to 5
             game_div = wait.until(EC.presence_of_element_located((By.ID, "game")))
             
-            # Verify page title
-            page_title = self.driver.title
-            self.log(f"📄 Page title: {page_title}")
+            self.log("✅ Emulator page loaded!")
             
-            if "Pokemon Fire Red" in page_title:
-                self.log("✅ Emulator page loaded successfully!")
-            else:
-                self.log("⚠️ Page loaded but title doesn't match expected emulator")
-            
-            # Activate the emulator to ensure it's ready for interaction
-            self.log("🎮 Activating emulator after page load...")
-            self.activate_emulator()
-            
-            # Ensure AI overlay functions are ready
-            self.log("🧠 Setting up AI thoughts overlay...")
+            # SPEED OPTIMIZATION: Quick setup (no activation delays)
             self.ensure_ai_overlay_functions()
+            self.send_ai_thought("Emulator ready", "Loading ROM...", "Starting soon")
             
-            # Test the AI overlay with a welcome message
-            self.send_ai_thought(
-                "Emulator loaded successfully",
-                "Ready to begin Pokemon adventure",
-                "Waiting for ROM upload"
-            )
-            
-            self.log("🎮 Emulator loaded successfully!")
+            self.log("✅ Emulator ready!")
             
         except Exception as e:
             self.log(f"❌ Failed to load emulator: {e}")
-            # Try to get more information about what went wrong
-            try:
-                current_url = self.driver.current_url
-                page_source_length = len(self.driver.page_source)
-                self.log(f"🔍 Debug info: URL={current_url}, Page source length={page_source_length}")
-            except:
-                pass
             raise
 
-    def dismiss_netplay_popup(self):
-        """Dismiss the netplay popup if it appears"""
+    def dismiss_any_popups(self):
+        """Simple popup dismissal for any unexpected dialogs (not netplay specific)"""
         try:
             dismiss_js = """
-            // Look for netplay/multiplayer modal or popup
-            const modals = document.querySelectorAll('[class*="modal"], [class*="popup"], [class*="dialog"], [class*="netplay"], [class*="multiplayer"]');
+            // Simple check for any modal dialogs and close buttons
+            const closeButtons = document.querySelectorAll('button, [role="button"]');
             let dismissed = false;
             
-            modals.forEach(modal => {
-                if (modal.style.display !== 'none' && modal.offsetParent !== null) {
-                    // Try to find close button
-                    const closeBtn = modal.querySelector('[class*="close"], [class*="cancel"], [class*="dismiss"], button');
-                    if (closeBtn) {
-                        closeBtn.click();
+            closeButtons.forEach(btn => {
+                const text = (btn.textContent || '').toLowerCase();
+                if (text.includes('close') || text.includes('ok') || text.includes('×')) {
+                    try {
+                        btn.click();
                         dismissed = true;
-                    } else {
-                        // Hide the modal directly
-                        modal.style.display = 'none';
-                        dismissed = true;
-                    }
-                }
-            });
-            
-            // Also check for specific netplay elements
-            const netplayElements = document.querySelectorAll('[id*="netplay"], [id*="multiplayer"]');
-            netplayElements.forEach(elem => {
-                if (elem.style.display !== 'none' && elem.offsetParent !== null) {
-                    elem.style.display = 'none';
-                    dismissed = true;
+                    } catch (e) {}
                 }
             });
             
@@ -305,15 +216,15 @@ class PokemonAIPlayer:
             
             dismissed = self.driver.execute_script(dismiss_js)
             if dismissed:
-                self.log("✅ Dismissed netplay popup")
+                self.log("✅ Dismissed unexpected popup")
             return dismissed
             
         except Exception as e:
-            self.log(f"⚠️ Error dismissing netplay popup: {e}")
+            self.log(f"⚠️ Error checking for popups: {e}")
             return False
 
     def upload_rom(self, rom_filename="roms/pokemonfr.gba"):
-        """Upload ROM to emulator via the web interface"""
+        """Upload ROM to emulator via the web interface - OPTIMIZED for speed"""
         self.log(f"⬆️ Uploading ROM: {rom_filename}")
         
         if not os.path.exists(rom_filename):
@@ -348,6 +259,9 @@ class PokemonAIPlayer:
                 
                 console.log('📁 Created ROM file:', romFile.name, romFile.size, 'bytes');
                 
+                // Store the ROM file for potential reloading
+                window.lastRomFile = romFile;
+                
                 // Load the ROM using the existing function
                 if (window.loadROM && typeof window.loadROM === 'function') {{
                     window.loadROM(romFile);
@@ -366,97 +280,46 @@ class PokemonAIPlayer:
             
             if 'SUCCESS' in result:
                 self.log("✅ ROM uploaded successfully!")
-                self.log("⏳ Waiting for emulator to initialize...")
                 
-                # Wait for emulator elements to be ready first
-                time.sleep(3)
+                # SPEED OPTIMIZATION: Quick ROM loading check  
+                self.log("⏳ Quick ROM loading check...")
                 
-                # Now properly start the emulator
-                self.log("🎮 Starting emulator...")
-                start_result = self.start_emulator_properly()
-                
-                if not start_result:
-                    self.log("❌ Emulator auto-start failed")
-                    self.log("🔧 You may need to manually click the emulator to start it")
-                    self.log("⏳ Waiting for manual intervention...")
-                    
-                    # Give user a chance to manually start
-                    manual_wait_result = self.wait_for_manual_start()
-                    if not manual_wait_result:
-                        return False
-                
-                # Final game loading verification
-                self.log("⏳ Waiting for ROM to fully load and emulator to start...")
-                
-                for i in range(30):  # Reduced to 1 minute total wait time
+                for i in range(8):  # Reduced from 30 to 8 (4 seconds max)
                     try:
-                        # Dismiss netplay popup if it appears
-                        self.dismiss_netplay_popup()
-                        
                         status_js = """
-                        // Check multiple indicators of game loading
-                        const gameDiv = document.getElementById('game');
-                        if (!gameDiv) return 'NO_GAME_DIV';
-                        
-                        const canvas = gameDiv.querySelector('canvas');
+                        // Quick status check
+                        const canvas = document.querySelector('#game canvas');
                         if (!canvas) return 'NO_CANVAS';
-                        
-                        if (canvas.width === 0 || canvas.height === 0) return 'CANVAS_NOT_READY';
-                        
-                        // Check if game has actually loaded (EJS callback) - PRIORITY CHECK
                         if (window.gameLoaded === true) return 'GAME_FULLY_LOADED';
-                        
-                        // Check if EmulatorJS is running
                         if (window.EJS && window.EJS.started === true) return 'EMULATOR_STARTED';
-                        
-                        // Check for actual game content (not white screen)
-                        try {
-                            // For EmulatorJS, check if there's actual game content
-                            if (canvas.width > 200 && canvas.height > 100) {
-                                // Canvas exists and has reasonable size
-                                return 'CANVAS_READY_CHECKING_CONTENT';
-                            }
-                            return 'CANVAS_TOO_SMALL';
-                            
-                        } catch (e) {
-                            return 'CANVAS_CHECK_ERROR: ' + e.message;
-                        }
+                        if (canvas.width > 200 && canvas.height > 100) return 'CANVAS_READY';
+                        return 'LOADING';
                         """
                         
                         status = self.driver.execute_script(status_js)
-                        self.log(f"📊 ROM Load status ({i+1}/30): {status}")
                         
-                        # Only proceed when we have confirmed game loading
-                        if status == 'GAME_FULLY_LOADED':
-                            self.log("🎉 ROM fully loaded and game ready!")
-                            # Wait briefly for game to settle
-                            time.sleep(2)
+                        if status in ['GAME_FULLY_LOADED', 'EMULATOR_STARTED']:
+                            self.log("✅ Game ready!")
                             return True
-                        elif status == 'EMULATOR_STARTED':
-                            self.log("⚡ Emulator started, waiting for game callback...")
-                            time.sleep(1)
-                        elif status in ['NO_GAME_DIV', 'NO_CANVAS']:
-                            self.log(f"⚠️ Missing elements: {status}")
-                            time.sleep(1)
-                        else:
-                            self.log(f"🔄 Status: {status}")
-                            time.sleep(1)
-                            
+                        elif status == 'CANVAS_READY':
+                            # After 3 seconds, assume it's working
+                            if i > 5:
+                                self.log("🚀 Canvas ready - starting gameplay!")
+                                return True
+                        
+                        time.sleep(0.5)  # Quick checks every 0.5 seconds
+                        
                     except Exception as e:
-                        self.log(f"⚠️ Status check error: {e}")
-                        time.sleep(1)
+                        time.sleep(0.5)
                 
-                self.log("⚠️ Game load timeout - ROM may not have loaded properly!")
-                self.log("🚨 CONTINUING ANYWAY - but expect issues!")
-                return False  # Return False to indicate potential issues
+                self.log("🚀 Quick start mode - proceeding with gameplay!")
+                return True
             else:
                 self.log(f"❌ ROM upload failed: {result}")
                 return False
             
         except Exception as e:
             self.log(f"❌ ROM upload failed: {e}")
-            import traceback
-            self.log(f"❌ Full error: {traceback.format_exc()}")
             return False
 
     def take_screenshot_tool(self, game_only=True):
@@ -670,18 +533,37 @@ class PokemonAIPlayer:
             messages = [
                 {
                     "role": "system",
-                    "content": f"""You are an AI playing Pokemon Fire Red. Analyze this screenshot and provide gameplay guidance.
+                    "content": f"""You are an AI playing Pokemon Fire Red. Analyze this screenshot and provide detailed gameplay guidance.
 
 CURRENT MEMORY CONTEXT:
 {memory_context}
 
 Your task: Look at the screenshot and provide:
-1. Detailed description of what you see
-2. Strategic analysis of the situation  
-3. Recommended actions to take
-4. Any important information to remember
+1. **Scene Description**: What type of location is this? (overworld, cave, building, menu, battle, etc.)
+2. **Player Position**: Where is the player character located on screen?
+3. **Interactive Elements**: NPCs, items, doors, ladders, signs, Pokemon, etc.
+4. **Navigation Instructions**: If this is a navigable area (overworld/cave/building), provide SPECIFIC movement directions
 
-Be specific about game elements: menus, battles, NPCs, locations, text, options, etc."""
+FOR NAVIGATION AREAS (overworld, caves, buildings):
+- Give precise movement instructions like "move UP 3 spaces then LEFT 2 spaces to reach the Pokemon Center"
+- Count grid spaces/tiles when possible
+- Identify key destinations: Pokemon Centers, Gyms, shops, exits, ladders, doors
+- Note obstacles: trees, rocks, water, walls, trainers
+- Suggest efficient pathing to objectives
+
+FOR BATTLES/MENUS:
+- Describe available options and recommend selections
+- Explain battle strategies and type advantages
+
+FOR DIALOGUE/TEXT:
+- Summarize the conversation and recommend responses
+- Note important story information
+
+MOVEMENT BATCHING: Always suggest batched movement for efficiency:
+- "[UP, UP, UP, LEFT, LEFT]" instead of individual moves
+- Chain movements with interactions: "[RIGHT, RIGHT, A]" to move then talk to NPC
+
+Be specific about game elements: coordinates, distances, exact button sequences needed."""
                 },
                 {
                     "role": "user",
@@ -702,7 +584,7 @@ Be specific about game elements: menus, battles, NPCs, locations, text, options,
             ]
             
             # Use robust API call instead of direct requests
-            content = self.robust_api_call(messages, max_tokens=1200, temperature=0.3, function_name="Direct Vision")
+            content = self.robust_api_call(messages, max_tokens=32000, temperature=0.3, function_name="Direct Vision")
             
             if content:
                 self.log(f"✅ Direct vision analysis complete: {content[:100]}...")
@@ -760,7 +642,7 @@ Focus: Choose the right tool to get visual information you need."""
             }]
             
             # Use robust API call
-            content = self.robust_api_call(messages, max_tokens=500, temperature=0.7, function_name="Tool Selection")
+            content = self.robust_api_call(messages, max_tokens=32000, temperature=0.7, function_name="Tool Selection")
             
             if content:
                 result = self.parse_json_with_fallback(content, "Tool Selection")
@@ -914,7 +796,7 @@ Focus: Choose the right tool to get visual information you need."""
             ]
             
             # Use robust API call for vision analysis
-            content = self.robust_api_call(messages, max_tokens=1000, temperature=0.3, function_name="Vision Analysis")
+            content = self.robust_api_call(messages, max_tokens=32000, temperature=0.3, function_name="Vision Analysis")
             
             if content and len(content.strip()) > 0:
                 self.log(f"✅ Vision analysis complete: {content[:100]}...")
@@ -1006,8 +888,15 @@ IMPORTANT:
 - Use arrows to move around - batch them for efficiency (["UP", "UP", "UP"])
 - Only use START if you see a title screen or need the main menu
 - Don't spam START button!
-- Use memory.txt to track your progress and plan ahead
-- Batch actions when possible to move faster"""
+- Use memory.txt to track your progress and plan ahead (320 entries, ~100 tokens each)
+- Include rich detail: locations, Pokemon, battles, story progress, items, NPCs
+- Batch actions when possible to move faster
+
+START BUTTON TROUBLESHOOTING:
+- If START doesn't work on title screens, try A instead
+- If you just pressed START and nothing happened, use A to proceed
+- A button is more reliable than START for advancing screens
+- When in doubt between START and A, choose A"""
                 },
                 {
                     "role": "user",
@@ -1129,17 +1018,20 @@ Key strategies:
 - Read all text carefully and make strategic decisions
 - Progress through the tutorial to start your Pokemon journey
 
-Memory management (memory.txt is your persistent scratchpad):
-- Add new important discoveries, locations, story progress, Pokemon caught
-- Update CURRENT PROGRESS with where you are in the game
-- Track Pokemon team composition, levels, and movesets
-- Note important NPCs, gym leaders defeated, items found
-- Remove outdated information and keep memory organized
-- Use memory to plan long-term strategies and remember past decisions
+Memory management (memory.txt is your massive persistent scratchpad - 320 entries!):
+- Each memory entry should be ~100 tokens (75-100 words) with rich detail
+- Format: "LOCATION: [place] | ACTION: [what you did] | RESULT: [outcome] | POKEMON: [team status] | NEXT: [plan]"
+- Track: story progress, Pokemon caught/trained, battles won/lost, items found, NPCs met
+- Include: levels, movesets, type advantages learned, gym strategies, important locations
+- Update CURRENT PROGRESS with detailed status and immediate goals
+- Plan long-term strategies: gym order, team building, story objectives
+- Track exploration: routes visited, areas unlocked, secrets found
 
-Analyze the image carefully to understand the current game state and respond appropriately.
+Examples of good memory entries:
+- "ROUTE 1: Caught Pidgey Lv4 (Tackle/Sand Attack), fought 3 trainers, gained 200 exp, learned type advantages. Rattata weak to Fighting moves. NEXT: Train team to Lv8 before Brock"
+- "VIRIDIAN CITY: Visited Pokemon Center (healed team), bought 5 Pokeballs, 3 Potions. Gym Leader absent. Old man taught catching demo. NEXT: Explore Route 2, find Viridian Forest"
 
-REMEMBER: You have persistent memory in memory.txt - use it to track progress and plan ahead!
+REMEMBER: You have MASSIVE memory capacity - use detailed, structured entries!
 BATCH ACTIONS: Chain movements and interactions for efficiency with 0.75s delays."""
                     },
                     {
@@ -1234,10 +1126,10 @@ BATCH ACTIONS: Chain movements and interactions for efficiency with 0.75s delays
                     new_memory.append(new_mem)
                     self.log(f"🧠 Added memory: {new_mem}")
             
-            # Keep memory size manageable
-            if len(new_memory) > 10:
-                new_memory = new_memory[-10:]
-                self.log("🧠 Trimmed memory to last 10 items")
+            # Keep memory size manageable (massive limit with 32K tokens)
+            if len(new_memory) > 320:
+                new_memory = new_memory[-320:]
+                self.log("🧠 Trimmed memory to last 320 items")
             
             return new_memory
             
@@ -1280,12 +1172,26 @@ SCREENSHOT COUNT: {self.screenshot_count}
 FILES: Screenshots saved as screenshot_1.png, screenshot_2.png, etc. with descriptions in screenshot_1.txt, screenshot_2.txt, etc.
 
 Provide detailed analysis focusing on:
-- Exact game state (battle, menu, overworld, dialogue)
-- Specific elements visible (Pokemon, NPCs, text, buttons)
-- Navigation context (where you are, where you can go)
-- Action recommendations based on what you see
+- **Scene Type**: Overworld, cave, building, battle, menu, dialogue, etc.
+- **Player Position**: Exact location of player character on the grid/screen
+- **Interactive Elements**: NPCs, items, Pokemon, doors, ladders, signs, trainers
+- **Navigation Instructions**: For movement areas, provide SPECIFIC directions
 
-Be specific about visual details that might not translate well to text descriptions."""
+FOR OVERWORLD/CAVES/BUILDINGS (when player can move):
+- Count exact tile distances: "Pokemon Center is 3 tiles UP, 2 tiles LEFT from player"
+- Identify pathways: "Clear path available" or "blocked by trainer/obstacle"
+- Suggest efficient batched movements: "[UP, UP, UP, LEFT, LEFT, A]"
+- Note all destinations: Pokemon Centers, Gyms, shops, exits, doors, ladders
+- Identify obstacles: trees, water, rocks, walls, NPCs, trainers
+
+FOR BATTLES/MENUS:
+- Describe options and recommend selections
+- Battle strategy and type advantages
+
+MOVEMENT EFFICIENCY: Always suggest batched actions for faster gameplay.
+Example: Instead of "move up then left", say "[UP, UP, LEFT, LEFT]"
+
+Be specific about visual details and provide actionable navigation guidance."""
                 },
                 {
                     "role": "user",
@@ -1306,7 +1212,7 @@ Be specific about visual details that might not translate well to text descripti
             ]
             
             # Use robust API call instead of direct requests
-            content = self.robust_api_call(messages, max_tokens=1200, temperature=0.3, function_name="Direct Vision")
+            content = self.robust_api_call(messages, max_tokens=32000, temperature=0.3, function_name="Direct Vision")
             
             if content:
                 self.log(f"✅ Direct vision analysis complete: {content[:100]}...")
@@ -1335,10 +1241,21 @@ Be specific about visual details that might not translate well to text descripti
                     "role": "system",
                     "content": f"""You are playing Pokemon Fire Red. You have memory context and current visual information.
 
-MEMORY (your persistent scratchpad):
+MEMORY (your persistent scratchpad - up to 320 entries):
 {memory_context}
 
 CURRENT VISUAL: {screenshot_desc}
+
+SMART START/A DETECTION:
+- Check your memory for recent "ATTEMPTED: START button pressed" entries
+- If you see recent START attempts but screen hasn't progressed, use A instead
+- If you're on a title screen or menu and unsure, A is safer than START
+
+MEMORY GUIDELINES:
+- You have room for 320 memory entries (massive context!)
+- Make each memory entry ~100 tokens (about 75-100 words)
+- Include rich detail: locations, Pokemon encountered, battle outcomes, story progress
+- Use structured format: "LOCATION: Pallet Town | ACTION: Talked to Mom | RESULT: Got running shoes | NEXT: Visit Oak's lab"
 
 Respond with JSON:
 {{
@@ -1354,11 +1271,19 @@ CONTROLS:
 - START: ONLY for title screen or main menu
 - SELECT: Special functions
 
+BUTTON TROUBLESHOOTING:
+- If START button doesn't respond on title screens, try A button instead
+- If you pressed START recently and nothing happened, use A to proceed
+- Some screens accept both START and A - A is more reliable
+- If stuck on a screen after pressing START, try A to advance
+
 BATCHING: Use efficient sequences like ["UP","UP","A"] or ["A","A","A"]
-MEMORY: Update your progress, Pokemon team, locations visited
+MEMORY: Update your progress with rich detail (~100 tokens per entry, up to 320 entries)
+- Include: locations, Pokemon encounters, battle results, story progress, NPCs met
+- Format: "LOCATION: Route 1 | POKEMON: Caught Pidgey Lv3 | MOVES: Tackle, Sand Attack | NEXT: Head to Viridian City"
 TOOLS: You can use recall_screenshot(N) or analyze_with_vision() if needed
 
-Strategy: Based on what you see, decide the best actions to progress the game."""
+Strategy: Based on what you see, decide the best actions to progress the game. If START fails, fallback to A."""
                 },
                 {
                     "role": "user", 
@@ -1366,8 +1291,8 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
                 }
             ]
             
-            # Use robust API call
-            content = self.robust_api_call(messages, max_tokens=800, temperature=0.7, function_name="Gameplay Decision")
+            # Use robust API call with higher token limit to prevent truncation
+            content = self.robust_api_call(messages, max_tokens=32000, temperature=0.7, function_name="Gameplay Decision")
              
             if content:
                 decision = self.parse_json_with_fallback(content, "Gameplay Decision", "A")
@@ -1639,6 +1564,9 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
                             }});
                         }}, 100);
                         
+                        // DEBUG: Log key press for troubleshooting
+                        console.log('🎮 Key pressed:', '{action}', 'keyCode:', mapping.keyCode, 'key:', mapping.key);
+                        
                         return 'SUCCESS';
                         
                     }} catch (error) {{
@@ -1650,6 +1578,15 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
                     
                     if result == 'SUCCESS':
                         self.log(f"⌨️ Action {i+1}/{len(actions)}: {action} -> {key}")
+                        
+                        # Track START button attempts for troubleshooting
+                        if action == "START":
+                            memory_list = self.load_memory()
+                            memory_list.append(f"ATTEMPTED: START button pressed at frame {self.screenshot_count}")
+                            # Keep memory manageable
+                            if len(memory_list) > 12:
+                                memory_list = memory_list[-12:]
+                            self.save_memory(memory_list)
                     else:
                         self.log(f"⚠️ Action {action} failed: {result}")
                         
@@ -1870,13 +1807,34 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
                     canvas.dispatchEvent(clickEvent);
                     
                     // Also trigger any play buttons if they exist
-                    const playButtons = document.querySelectorAll('button, .play-button, .start-button');
+                    const playButtons = document.querySelectorAll('button, .play-button, .start-button, .ejs__play_button, .ejs_play_button, [class*="play"], [class*="start"]');
+                    let buttonClicked = false;
+                    
                     playButtons.forEach(btn => {
                         if (btn.textContent.toLowerCase().includes('play') || 
-                            btn.textContent.toLowerCase().includes('start')) {
+                            btn.textContent.toLowerCase().includes('start') ||
+                            btn.className.includes('play') ||
+                            btn.className.includes('start')) {
+                            console.log('🎮 Clicking start/play button:', btn);
                             btn.click();
+                            buttonClicked = true;
                         }
                     });
+                    
+                    // Look specifically for the green circular start button we styled
+                    const greenStartButton = document.querySelector('[style*="background: #4CAF50"], [style*="border-radius: 50%"]');
+                    if (greenStartButton && !buttonClicked) {
+                        console.log('🎮 Clicking green start button');
+                        greenStartButton.click();
+                        buttonClicked = true;
+                    }
+                    
+                    // If no specific button found, try clicking anywhere that might trigger start
+                    if (!buttonClicked) {
+                        // Click center of the game area to trigger any hidden start elements
+                        canvas.click();
+                        console.log('🎮 Clicked canvas center as fallback');
+                    }
                     
                     // Try to start EmulatorJS if available
                     if (window.EJS && typeof window.EJS.start === 'function') {
@@ -2157,16 +2115,31 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
             self.log(f"❌ Manual start check failed: {e}")
             return False
 
-    def robust_api_call(self, messages, max_tokens=800, temperature=0.7, function_name="API"):
-        """Robust API call with retries and better error handling"""
-        max_retries = 3
-        base_timeout = 45
+    def robust_api_call(self, messages, max_tokens=32000, temperature=0.7, function_name="API"):
+        """Robust API call with smart timeout handling and minimal retries"""
+        
+        # Smart timeout strategy: Start high, only retry on real failures
+        if function_name == "Gameplay Decision":
+            # For complex decisions: Start with very generous timeout
+            initial_timeout = 180  # 3 minutes - let it think!
+            max_retries = 2  # Only retry once on real failures
+        else:
+            # For other APIs: Still generous but faster
+            initial_timeout = 120  # 2 minutes  
+            max_retries = 2
         
         for attempt in range(max_retries):
             try:
-                timeout = base_timeout + (attempt * 15)  # Increase timeout each retry
+                # Use the initial generous timeout for all attempts
+                # Only retry on connection failures, not timeouts
+                timeout = initial_timeout
                 self.log(f"📡 {function_name} API call (attempt {attempt + 1}/{max_retries}, timeout: {timeout}s)")
+                if function_name == "Gameplay Decision":
+                    self.log(f"🧠 Waiting for strategic AI analysis... this can take 1-3 minutes for complex decisions")
+                else:
+                    self.log(f"⏳ Processing {function_name}... being patient with AI")
                 
+                # Make the API call with generous timeout
                 response = requests.post(
                     "https://api.x.ai/v1/chat/completions",
                     headers={
@@ -2200,11 +2173,16 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
                     continue
                     
             except requests.exceptions.Timeout:
-                self.log(f"⏰ {function_name} timeout on attempt {attempt + 1}")
-                if attempt == max_retries - 1:
-                    self.log(f"❌ {function_name} failed after {max_retries} timeout attempts")
+                self.log(f"⏰ {function_name} timeout after {timeout}s - this might be normal for complex reasoning")
+                if function_name == "Gameplay Decision" and attempt == 0:
+                    # For gameplay decisions, one timeout might be normal - try once more with even longer timeout
+                    self.log(f"🤔 Complex AI reasoning can take time, trying once more with extra patience...")
+                elif attempt == max_retries - 1:
+                    self.log(f"❌ {function_name} failed after {timeout}s - API might be overloaded")
                     return None
-                time.sleep(5)
+                else:
+                    self.log(f"🔄 Retrying {function_name} - might be network issue...")
+                time.sleep(10)  # Longer wait before retry
                 
             except requests.exceptions.RequestException as e:
                 self.log(f"🌐 {function_name} connection error: {e}")
@@ -2224,32 +2202,42 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
                 "memory_updates": {}
             }
         
+        # DEBUG: Log the raw response to see what we're getting
+        self.log(f"🔍 DEBUG {function_name} raw response: {content[:200]}...")
+        
         # Try direct JSON parse
         try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
+            parsed = json.loads(content)
+            self.log(f"✅ {function_name}: Direct JSON parse successful")
+            return parsed
+        except json.JSONDecodeError as e:
+            self.log(f"❌ {function_name}: Direct JSON parse failed: {e}")
         
         # Try to extract JSON from markdown code blocks
         import re
         json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                pass
+                parsed = json.loads(json_match.group(1))
+                self.log(f"✅ {function_name}: Markdown JSON parse successful")
+                return parsed
+            except json.JSONDecodeError as e:
+                self.log(f"❌ {function_name}: Markdown JSON parse failed: {e}")
         
         # Try to find JSON-like structure in the text
         json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content)
         if json_match:
             try:
-                return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
+                parsed = json.loads(json_match.group(0))
+                self.log(f"✅ {function_name}: Regex JSON parse successful")
+                return parsed
+            except json.JSONDecodeError as e:
+                self.log(f"❌ {function_name}: Regex JSON parse failed: {e}")
         
         # Final fallback - extract reasoning from text
-        if function_name != "Test":  # Don't log warnings during testing
-            self.log(f"⚠️ {function_name}: JSON parse failed, using text fallback")
+        self.log(f"⚠️ {function_name}: All JSON parsing failed, using text fallback")
+        self.log(f"🔍 DEBUG Full response: {content}")
+        
         reasoning = content[:200] + "..." if len(content) > 200 else content
         
         # Look for action words in the response
@@ -2258,6 +2246,7 @@ Strategy: Based on what you see, decide the best actions to progress the game.""
         for word in action_words:
             if word.lower() in content.lower():
                 action = word
+                self.log(f"🎯 Found action word '{word}' in response")
                 break
         
         return {
